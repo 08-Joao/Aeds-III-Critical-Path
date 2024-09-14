@@ -15,64 +15,113 @@
 # Também foi utilizado inteligência artificial para o desenvolvimento do código, como ChatGPT e Codeium para correção de pequenos erros.
 
 # Dependência(s):
-    # pip install networkx para o uso do networkx
 
-import sys
-import os
-import timeit
-from tkinter import Tk, filedialog
+
 import csv
-import networkx as nx
-def ler_csv(caminho_arquivo):
-    grafo = nx.DiGraph()
-    with open(caminho_arquivo, newline='', encoding='utf-8') as csvfile:  # Adiciona a codificação UTF-8
-        leitor = csv.reader(csvfile)
-        next(leitor)  # Pula o cabeçalho Código,Nome,Período,Duração,Dependências...
-        for linha in leitor:
-            codigo, nome, periodo, duracao, dependencias = linha
-            duracao = int(duracao)
-            # Adiciona o nó da disciplina
-            grafo.add_node(codigo, nome=nome, duracao=duracao)
-            # Adiciona as arestas de dependências
-            if dependencias:
-                for dep in dependencias.split(';'):
-                    grafo.add_edge(dep, codigo, weight=duracao)
+from tkinter import Tk, filedialog
+
+def ler_csv(file_path):
+    grafo = {}
+    
+    with open(file_path, mode='r', encoding='utf-8') as file:
+        leitor = csv.DictReader(file)
+        cursos = list(leitor)
+        
+        # Criação dos nós dos cursos
+        for linha in cursos:
+            codigo = linha['Código']
+            dependencias = linha['Dependências'].split(';') if linha['Dependências'] else []
+            
+            if codigo not in grafo:
+                grafo[codigo] = {}
+            
+            # Adiciona arestas para dependências
+            for dependencia in dependencias:
+                if dependencia:
+                    if dependencia not in grafo:
+                        grafo[dependencia] = {}
+                    grafo[dependencia][codigo] = 1  # Aresta de dependência com capacidade 1
+            
+            # Adiciona aresta para o nó de destino (T)
+            grafo[codigo]['T'] = 0
+        
+        # Adiciona o nó de origem (S)
+        grafo['S'] = {}
+        for linha in cursos:
+            codigo = linha['Código']
+            if not linha['Dependências']:
+                grafo['S'][codigo] = 1
+        
+        # Adiciona o nó de destino (T) no final
+        grafo['T'] = {'T': 0}
     
     return grafo
 
-def caminho_critico(grafo):
-    # Verifica se o grafo é acíclico
-    if not nx.is_directed_acyclic_graph(grafo):
-        raise ValueError("O grafo contém ciclos!")
-    
-    # Encontra o caminho mais longo
-    caminho_maximo = nx.dag_longest_path(grafo, weight='weight')
-    duracao_total = nx.dag_longest_path_length(grafo, weight='weight')
-    
-    return caminho_maximo, duracao_total
+def reorganizar_arestas(grafo):
+    for origem in grafo:
+        if 'T' in grafo[origem]:
+            arestas = {k: grafo[origem][k] for k in grafo[origem] if k != 'T'}
+            arestas['T'] = grafo[origem]['T']
+            grafo[origem] = arestas
 
-def exibir_resultados(caminho, duracao_total, grafo):
-    print(f"O caminho crítico é composto pelas seguintes disciplinas:")
-    for codigo in caminho:
-        print(f"{codigo} - {grafo.nodes[codigo]['nome']}")
-    print(f"Tempo mínimo para conclusão: {duracao_total} períodos.")
+def calcular_caminho_critico(grafo):
+    # Encontra todos os caminhos possíveis de 'S' para 'T'
+    def dfs(caminho_atual, nodo):
+        if nodo == 'T':
+            caminhos.append(list(caminho_atual))
+            return
+        for vizinho in grafo.get(nodo, {}):
+            if vizinho not in caminho_atual:  # Evita ciclos
+                caminho_atual.append(vizinho)
+                dfs(caminho_atual, vizinho)
+                caminho_atual.pop()
+    
+    caminhos = []
+    dfs(['S'], 'S')
+    
+    if not caminhos:
+        raise ValueError("Nenhum caminho encontrado de 'S' para 'T'.")
+    
+    # Calcula a duração de cada caminho
+    duracao_caminhos = []
+    for caminho in caminhos:
+        duracao = 0
+        for i in range(len(caminho) - 1):
+            duracao += grafo[caminho[i]].get(caminho[i + 1], 0)
+        duracao_caminhos.append((caminho, duracao))
+    
+    # Encontra o caminho crítico
+    caminho_critico = max(duracao_caminhos, key=lambda x: x[1])
+    
+    return caminho_critico
+
+def imprimir_grafo(grafo):
+    # Ordena as chaves, coloca "T" no final e "S" antes de "T"
+    chaves = list(grafo.keys())
+    if 'T' in chaves:
+        chaves.remove('T')
+        chaves.append('T')
+    if 'S' in chaves:
+        chaves.remove('S')
+        chaves.insert(0, 'S')
+    
+    for origem in chaves:
+        print(f'"{origem}": {grafo[origem]}')
 
 def main():
     Tk().withdraw()
+    file_path = filedialog.askopenfilename(initialdir='.', filetypes=[('CSV files', '*.csv')])
     
+    if not file_path:
+        print('Programa encerrado pelo usuário.')
+        return
 
-    while True:
-        # Define o diretório padrão para se procurar arquivos. Atualmente definido na mesma pasta do Main.py
-        arquivo = filedialog.askopenfilename(initialdir=os.path.dirname(__file__))
-        
-        if not arquivo: # Verifica se o usuário clicou em cancelar
-            print('Programa encerrado pelo usuário.')
-            break
+    grafo = ler_csv(file_path)
+    reorganizar_arestas(grafo)
+    imprimir_grafo(grafo)
+    caminhoCritico = calcular_caminho_critico(grafo)
+    print(f'Caminho critico: {caminhoCritico}')
+    main()
 
-        grafo = ler_csv(arquivo)
-        caminho, duracao_total = caminho_critico(grafo)
-        exibir_resultados(caminho, duracao_total, grafo)
-    
-    
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
