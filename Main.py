@@ -16,12 +16,12 @@
 
 # Dependência(s):
 
-
 import csv
 from tkinter import Tk, filedialog
 
 def ler_csv(file_path):
     grafo = {}
+    nomes_dos_cursos = {}
     
     with open(file_path, mode='r', encoding='utf-8') as file:
         leitor = csv.DictReader(file)
@@ -30,7 +30,10 @@ def ler_csv(file_path):
         # Criação dos nós dos cursos
         for linha in cursos:
             codigo = linha['Código']
+            nome = linha['Nome']
             dependencias = linha['Dependências'].split(';') if linha['Dependências'] else []
+            
+            nomes_dos_cursos[codigo] = nome  # Armazena o nome do curso
             
             if codigo not in grafo:
                 grafo[codigo] = {}
@@ -55,7 +58,7 @@ def ler_csv(file_path):
         # Adiciona o nó de destino (T) no final
         grafo['T'] = {'T': 0}
     
-    return grafo
+    return grafo, nomes_dos_cursos
 
 def reorganizar_arestas(grafo):
     for origem in grafo:
@@ -65,7 +68,6 @@ def reorganizar_arestas(grafo):
             grafo[origem] = arestas
 
 def calcular_caminho_critico(grafo):
-    # Encontra todos os caminhos possíveis de 'S' para 'T'
     def dfs(caminho_atual, nodo):
         if nodo == 'T':
             caminhos.append(list(caminho_atual))
@@ -82,7 +84,6 @@ def calcular_caminho_critico(grafo):
     if not caminhos:
         raise ValueError("Nenhum caminho encontrado de 'S' para 'T'.")
     
-    # Calcula a duração de cada caminho
     duracao_caminhos = []
     for caminho in caminhos:
         duracao = 0
@@ -90,13 +91,19 @@ def calcular_caminho_critico(grafo):
             duracao += grafo[caminho[i]].get(caminho[i + 1], 0)
         duracao_caminhos.append((caminho, duracao))
     
-    # Encontra o caminho crítico
     caminho_critico = max(duracao_caminhos, key=lambda x: x[1])
     
     return caminho_critico
 
+def imprimir_caminho_critico(caminho_critico, nomes_dos_cursos):
+    caminho, duracao = caminho_critico
+    caminho_formatado = [
+        f"{codigo}({nomes_dos_cursos[codigo]})" if codigo in nomes_dos_cursos else codigo
+        for codigo in caminho
+    ]
+    print(f'Caminho crítico: {caminho_formatado} com duração de {duracao}')
+
 def imprimir_grafo(grafo):
-    # Ordena as chaves, coloca "T" no final e "S" antes de "T"
     chaves = list(grafo.keys())
     if 'T' in chaves:
         chaves.remove('T')
@@ -116,12 +123,11 @@ def main():
         print('Programa encerrado pelo usuário.')
         return
 
-    grafo = ler_csv(file_path)
+    grafo, nomes_dos_cursos = ler_csv(file_path)
     reorganizar_arestas(grafo)
     imprimir_grafo(grafo)
-    caminhoCritico = calcular_caminho_critico(grafo)
-    print(f'Caminho critico: {caminhoCritico}')
-    main()
+    caminho_critico = calcular_caminho_critico(grafo)
+    imprimir_caminho_critico(caminho_critico, nomes_dos_cursos)
 
 if __name__ == "__main__":
     main()
