@@ -21,7 +21,6 @@ from tkinter import Tk, filedialog
 
 def ler_csv(file_path):
     grafo = {}
-    nomes_dos_cursos = {}
     
     with open(file_path, mode='r', encoding='utf-8') as file:
         leitor = csv.DictReader(file)
@@ -30,20 +29,17 @@ def ler_csv(file_path):
         # Criação dos nós dos cursos
         for linha in cursos:
             codigo = linha['Código']
-            nome = linha['Nome']
             dependencias = linha['Dependências'].split(';') if linha['Dependências'] else []
-            
-            nomes_dos_cursos[codigo] = nome  # Armazena o nome do curso
             
             if codigo not in grafo:
                 grafo[codigo] = {}
             
-            # Adiciona arestas para dependências
+            # Adiciona arestas para dependências com peso 1
             for dependencia in dependencias:
                 if dependencia:
                     if dependencia not in grafo:
                         grafo[dependencia] = {}
-                    grafo[dependencia][codigo] = 1  # Aresta de dependência com capacidade 1
+                    grafo[dependencia][codigo] = 1  # Aresta de dependência com peso 1
             
             # Adiciona aresta para o nó de destino (T)
             grafo[codigo]['T'] = 0
@@ -58,52 +54,38 @@ def ler_csv(file_path):
         # Adiciona o nó de destino (T) no final
         grafo['T'] = {'T': 0}
     
-    return grafo, nomes_dos_cursos
+    return grafo
 
-def reorganizar_arestas(grafo):
-    for origem in grafo:
-        if 'T' in grafo[origem]:
-            arestas = {k: grafo[origem][k] for k in grafo[origem] if k != 'T'}
-            arestas['T'] = grafo[origem]['T']
-            grafo[origem] = arestas
+def bellman_ford(grafo, inicio, fim):
+    # Inicialização das distâncias: dist[inicio] = 0, o resto = -inf (inverso de caminho mínimo)
+    dist = {nodo: float('-inf') for nodo in grafo}
+    dist[inicio] = 0
 
-def calcular_caminho_critico(grafo):
-    def dfs(caminho_atual, nodo):
-        if nodo == 'T':
-            caminhos.append(list(caminho_atual))
-            return
-        for vizinho in grafo.get(nodo, {}):
-            if vizinho not in caminho_atual:  # Evita ciclos
-                caminho_atual.append(vizinho)
-                dfs(caminho_atual, vizinho)
-                caminho_atual.pop()
-    
-    caminhos = []
-    dfs(['S'], 'S')
-    
-    if not caminhos:
-        raise ValueError("Nenhum caminho encontrado de 'S' para 'T'.")
-    
-    duracao_caminhos = []
-    for caminho in caminhos:
-        duracao = 0
-        for i in range(len(caminho) - 1):
-            duracao += grafo[caminho[i]].get(caminho[i + 1], 0)
-        duracao_caminhos.append((caminho, duracao))
-    
-    caminho_critico = max(duracao_caminhos, key=lambda x: x[1])
-    
-    return caminho_critico
+    # Inicializa os predecessores para reconstruir o caminho
+    predecessor = {nodo: None for nodo in grafo}
 
-def imprimir_caminho_critico(caminho_critico, nomes_dos_cursos):
-    caminho, duracao = caminho_critico
-    caminho_formatado = [
-        f"{codigo}({nomes_dos_cursos[codigo]})" if codigo in nomes_dos_cursos else codigo
-        for codigo in caminho
-    ]
-    print(f'Caminho crítico: {caminho_formatado} com duração de {duracao}')
+    # Passo 1: Relaxar as arestas (|V| - 1) vezes
+    for _ in range(len(grafo) - 1):
+        for u in grafo:
+            for v in grafo[u]:
+                peso = grafo[u][v]
+                if dist[u] + peso > dist[v]:  # Invertido para maximizar ao invés de minimizar
+                    dist[v] = dist[u] + peso
+                    predecessor[v] = u
+
+    # Passo 2: Verificar ciclos negativos (não aplicável aqui, pois é um DAG com dependências)
+    
+    # Reconstruir o caminho a partir dos predecessores
+    caminho = []
+    nodo_atual = fim
+    while nodo_atual is not None:
+        caminho.insert(0, nodo_atual)
+        nodo_atual = predecessor[nodo_atual]
+
+    return caminho, dist[fim]
 
 def imprimir_grafo(grafo):
+    # Ordena as chaves, coloca "T" no final e "S" antes de "T"
     chaves = list(grafo.keys())
     if 'T' in chaves:
         chaves.remove('T')
@@ -123,11 +105,12 @@ def main():
         print('Programa encerrado pelo usuário.')
         return
 
-    grafo, nomes_dos_cursos = ler_csv(file_path)
-    reorganizar_arestas(grafo)
+    grafo = ler_csv(file_path)
     imprimir_grafo(grafo)
-    caminho_critico = calcular_caminho_critico(grafo)
-    imprimir_caminho_critico(caminho_critico, nomes_dos_cursos)
+    
+    caminho_maximo, duracao = bellman_ford(grafo, 'S', 'T')
+    print(f'Caminho máximo: {caminho_maximo}')
+    print(f'Duração do caminho máximo: {duracao}')
 
 if __name__ == "__main__":
     main()
