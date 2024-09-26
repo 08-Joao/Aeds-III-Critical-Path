@@ -21,42 +21,46 @@ from tkinter import Tk, filedialog
 
 def ler_csv(file_path):
     grafo = {}
-    
+    nomes_materias = {}  # Dicionário para armazenar nomes das disciplinas
+
     with open(file_path, mode='r', encoding='utf-8') as file:
         leitor = csv.DictReader(file)
         cursos = list(leitor)
-        
+
         # Criação dos nós dos cursos
         for linha in cursos:
             codigo = linha['Código']
-            dependencias = linha['Dependências'].split(';') if linha['Dependências'] else []
+            nome = linha['Nome']  # Obtendo o nome da disciplina
+            nomes_materias[codigo] = nome  # Armazenando o nome da disciplina
             
+            dependencias = linha['Dependências'].split(';') if linha['Dependências'] else []
+
             if codigo not in grafo:
                 grafo[codigo] = {}
-            
+
             # Adiciona arestas para dependências com peso 1
             for dependencia in dependencias:
                 if dependencia:
                     if dependencia not in grafo:
                         grafo[dependencia] = {}
                     grafo[dependencia][codigo] = 1  # Aresta de dependência com peso 1
-            
+
             # Adiciona aresta para o nó de destino (T)
             grafo[codigo]['T'] = 0
-        
+
         # Adiciona o nó de origem (S)
         grafo['S'] = {}
         for linha in cursos:
             codigo = linha['Código']
             if not linha['Dependências']:
                 grafo['S'][codigo] = 1
-        
+
         # Adiciona o nó de destino (T) no final
         grafo['T'] = {'T': 0}
-    
-    return grafo
 
-def bellman_ford(grafo, inicio, fim):
+    return grafo, nomes_materias
+
+def bellman_ford(grafo, inicio, fim, nomes_materias):
     # Inicialização das distâncias: dist[inicio] = 0, o resto = -inf (inverso de caminho mínimo)
     dist = {nodo: float('-inf') for nodo in grafo}
     dist[inicio] = 0
@@ -82,7 +86,15 @@ def bellman_ford(grafo, inicio, fim):
         caminho.insert(0, nodo_atual)
         nodo_atual = predecessor[nodo_atual]
 
-    return caminho, dist[fim]
+    # Imprimir caminho com nomes das disciplinas
+    caminho_completo = []
+    for nodo in caminho:
+        if nodo in nomes_materias:
+            caminho_completo.append(f'{nodo}({nomes_materias[nodo]})')
+        else:
+            caminho_completo.append(nodo)
+
+    return caminho_completo, dist[fim]
 
 def imprimir_grafo(grafo):
     # Ordena as chaves, coloca "T" no final e "S" antes de "T"
@@ -105,10 +117,10 @@ def main():
         print('Programa encerrado pelo usuário.')
         return
 
-    grafo = ler_csv(file_path)
+    grafo, nomes_materias = ler_csv(file_path)
     imprimir_grafo(grafo)
     
-    caminho_maximo, duracao = bellman_ford(grafo, 'S', 'T')
+    caminho_maximo, duracao = bellman_ford(grafo, 'S', 'T', nomes_materias)
     print(f'Caminho máximo: {caminho_maximo}')
     print(f'Duração do caminho máximo: {duracao}')
 
